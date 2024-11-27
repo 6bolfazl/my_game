@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>بازی باینری آپشن با کندل‌استیک</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    .container {
+      max-width: 800px;
+      margin: 50px auto;
+      background: white;
+      padding: 20px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+    }
+    input, button {
+      padding: 10px;
+      font-size: 1em;
+      width: 100%;
+      margin: 10px 0;
+      border-radius: 5px;
+      border: 1px solid #ddd;
+    }
+    button {
+      background-color: #4caf50;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    canvas {
+      max-width: 100%;
+      height: 400px;
+    }
+    .balance {
+      font-size: 1.2em;
+      margin: 10px 0;
+    }
+    .bet-amount {
+      margin: 20px 0;
+    }
+    .bet-amount input {
+      padding: 10px;
+      font-size: 1em;
+      width: 100px;
+      text-align: center;
+    }
+    .withdraw-btn {
+      background-color: #ff9800;
+    }
+    .withdraw-btn:hover {
+      background-color: #fb8c00;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- فرم ورود اطلاعات کاربر -->
+  <div class="container" id="userInfoContainer">
+    <h1>اطلاعات کاربری</h1>
+    <form id="userInfoForm">
+      <label for="phoneNumber">شماره تلفن:</label>
+      <input type="text" id="phoneNumber" required placeholder="شماره تلفن خود را وارد کنید">
+     
+      <label for="cardNumber">شماره کارت:</label>
+      <input type="text" id="cardNumber" required placeholder="شماره کارت خود را وارد کنید">
+     
+      <button type="submit">ورود به بازی</button>
+    </form>
+  </div>
+
+  <!-- صفحه بازی -->
+  <div class="container" id="gameContainer" style="display:none;">
+    <h1>بازی باینری آپشن با کندل‌استیک</h1>
+    <div class="balance">موجودی شما: <span id="balance">100000</span> تومان</div>
+    <div class="bet-amount">
+      <label for="betInput">مبلغ شرط (تومان):</label>
+      <input type="number" id="betInput" value="10000" min="1" />
+    </div>
+    <canvas id="candlestickChart"></canvas>
+    <div class="buttons">
+      <button class="up" onclick="makePrediction('up')">بالا</button>
+      <button class="down" onclick="makePrediction('down')">پایین</button>
+    </div>
+    <div class="result" id="result">منتظر انتخاب شما...</div>
+
+    <!-- دکمه مجوز برداشت -->
+    <button id="withdrawBtn" class="withdraw-btn" onclick="withdraw()" style="display: none;">مجوز برداشت</button>
+  </div>
+
+  <script>
+    // متغیر برای ذخیره اطلاعات کاربر
+    let userInfo = {
+      phoneNumber: '',
+      cardNumber: ''
+    };
+
+    // نمایش صفحه بازی پس از ورود اطلاعات
+    document.getElementById('userInfoForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      userInfo.phoneNumber = document.getElementById('phoneNumber').value;
+      userInfo.cardNumber = document.getElementById('cardNumber').value;
+
+      // مخفی کردن فرم و نمایش صفحه بازی
+      document.getElementById('userInfoContainer').style.display = 'none';
+      document.getElementById('gameContainer').style.display = 'block';
+    });
+
+    // مقدار اولیه کاربر و موجودی
+    let currentUser = { balance: 100000 };
+
+    // نمایش موجودی
+    window.onload = () => {
+      document.getElementById("balance").textContent = currentUser.balance + " تومان";
+      checkWithdrawPermission();
+    };
+
+    // داده‌های اولیه برای کندل‌ها
+    const initialCandles = [
+      { x: 1, o: 1000, h: 1020, l: 980, c: 1010 },
+      { x: 2, o: 1010, h: 1030, l: 1000, c: 1020 },
+      { x: 3, o: 1020, h: 1050, l: 1010, c: 1040 },
+      { x: 4, o: 1040, h: 1060, l: 1020, c: 1030 }
+    ];
+
+    // رسم نمودار کندل‌استیک
+    const ctx = document.getElementById('candlestickChart').getContext('2d');
+    const candlestickChart = new Chart(ctx, {
+      type: 'candlestick',
+      data: {
+        datasets: [{
+          label: 'قیمت',
+          data: initialCandles,
+          borderColor: 'black',
+          color: {
+            up: '#4caf50',
+            down: '#f44336',
+            unchanged: '#999'
+          }
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { type: 'linear' },
+          y: { beginAtZero: false }
+        }
+      }
+    });
+
+    // افزودن کندل جدید
+    function addCandle() {
+      const lastCandle = initialCandles[initialCandles.length - 1];
+      const open = lastCandle.c;
+      const close = open + (Math.random() > 0.5 ? Math.random() * 20 : -Math.random() * 20);
+      const high = Math.max(open, close) + Math.random() * 10;
+      const low = Math.min(open, close) - Math.random() * 10;
+
+      const newCandle = { x: initialCandles.length + 1, o: open, h: high, l: low, c: close };
+      initialCandles.push(newCandle);
+      candlestickChart.data.datasets[0].data.push(newCandle);
+      candlestickChart.update();
+    }
+
+    // بررسی پیش‌بینی
+    function makePrediction(prediction) {
+      const betAmount = parseInt(document.getElementById('betInput').value);
+      if (betAmount > currentUser.balance) {
+        alert("موجودی کافی نیست.");
+        return;
+      }
+
+      const lastCandle = initialCandles[initialCandles.length - 1];
+      addCandle();
+
+      const newCandle = initialCandles[initialCandles.length - 1];
+      const predictionResult = (prediction === 'up' && newCandle.c > lastCandle.c) ||
+                               (prediction === 'down' && newCandle.c < lastCandle.c);
+
+      if (predictionResult) {
+        currentUser.balance += betAmount;
+        document.getElementById("result").textContent = "شما برنده شدید!";
+      } else {
+        currentUser.balance -= betAmount;
+        document.getElementById("result").textContent = "شما باختید.";
+      }
+
+      document.getElementById("balance").textContent = currentUser.balance + " تومان";
+      checkWithdrawPermission(); // بررسی مجوز برداشت بعد از هر تغییر در موجودی
+    }
+
+    // بررسی شرایط مجوز برداشت
+    function checkWithdrawPermission() {
+      if (currentUser.balance >= 110000) {
+        document.getElementById("withdrawBtn").style.display = "inline-block"; // نمایش دکمه
+      } else {
+        document.getElementById("withdrawBtn").style.display = "none"; // مخفی کردن دکمه
+      }
+    }
+
+    // عملکرد برداشت
+    function withdraw() {
+      const withdrawalAmount = currentUser.balance;
+      currentUser.balance = 0;
+      document.getElementById("balance").textContent = currentUser.balance + " تومان";
+      alert("برداشت موفقیت‌آمیز بود. مبلغ " + withdrawalAmount + " تومان برداشت شد.");
+      checkWithdrawPermission(); // بررسی مجدد وضعیت دکمه برداشت
+    }
+  </script>
+</body>
+</html>
+
+
